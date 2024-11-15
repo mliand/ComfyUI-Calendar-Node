@@ -18,7 +18,19 @@ class ComfyCalendarNode:
                 "grid_color": ("STRING", {"default": "gray"}),
                 "title_font_size": ("INT", {"default": 24, "min": 12, "max": 48}),
                 "day_font_size": ("INT", {"default": 18, "min": 12, "max": 36}),
-                "grid_line_style": ("STRING", {"default": "solid", "options": ["solid", "dashed", "dotted"]})
+                "grid_line_style": ("STRING", {"default": "solid", "options": ["solid", "dashed", "dotted"]}),
+
+                # Padding options
+                "padding_top": ("INT", {"default": 20, "min": 0, "max": 200}),
+                "padding_left": ("INT", {"default": 20, "min": 0, "max": 200}),
+                "padding_right": ("INT", {"default": 20, "min": 0, "max": 200}),
+                "padding_bottom": ("INT", {"default": 20, "min": 0, "max": 200}),
+
+                # More specific padding options for fine-tuned control
+                "title_padding": ("INT", {"default": 20, "min": 0, "max": 200}),
+                "week_header_padding": ("INT", {"default": 10, "min": 0, "max": 100}),
+                "day_cell_padding": ("INT", {"default": 5, "min": 0, "max": 50}),
+                "grid_padding": ("INT", {"default": 20, "min": 0, "max": 100}),
             }
         }
 
@@ -26,7 +38,7 @@ class ComfyCalendarNode:
     FUNCTION = "create_calendar"
     CATEGORY = "CALENDAR NODES"
 
-    def create_calendar(self, month, year, width, height, bg_color, text_color, grid_color, title_font_size, day_font_size, grid_line_style):
+    def create_calendar(self, month, year, width, height, bg_color, text_color, grid_color, title_font_size, day_font_size, grid_line_style, padding_top, padding_left, padding_right, padding_bottom, title_padding, week_header_padding, day_cell_padding, grid_padding):
         try:
             # Step 1: Create a blank image with the specified background color
             image = Image.new('RGB', (width, height), bg_color)
@@ -45,20 +57,21 @@ class ComfyCalendarNode:
             title = f"{month_name} {year}"
             title_bbox = draw.textbbox((0, 0), title, font=title_font)
             title_x = (width - title_bbox[2]) // 2
-            title_y = height // 20  # Add some margin from the top
+            title_y = padding_top + title_padding  # Adjusted title padding
             draw.text((title_x, title_y), title,
                       fill=text_color, font=title_font)
 
             # Step 4: Define the starting point and spacing for the weekday headers
-            # Adjust vertical spacing between title and weekday headers
-            days_header_top = title_y + title_bbox[3] + 30
+            # Adjusted for more space control
+            days_header_top = title_y + title_bbox[3] + week_header_padding
             days_header_height = height // 10  # Allocate space for the weekday headers
-            cell_width = width // 7  # 7 columns for each day of the week
+            # 7 columns for each day of the week
+            cell_width = (width - padding_left - padding_right) // 7
 
             # Step 5: Draw weekday headers at the top of the grid
             days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
             for i, day in enumerate(days):
-                day_x = i * cell_width + \
+                day_x = padding_left + i * cell_width + \
                     (cell_width - draw.textbbox((0, 0),
                      day, font=day_font)[2]) // 2
                 draw.text((day_x, days_header_top), day,
@@ -66,8 +79,8 @@ class ComfyCalendarNode:
 
             # Step 6: Define grid layout area below the headers for dates
             grid_top = days_header_top + days_header_height + \
-                20  # Add margin between headers and date grid
-            grid_height = height - grid_top - 20  # Leave padding at the bottom
+                grid_padding  # Add margin between headers and date grid
+            grid_height = height - grid_top - padding_bottom  # Leave padding at the bottom
             # 6 rows for dates (max number of weeks)
             cell_height = grid_height // 6
 
@@ -75,7 +88,7 @@ class ComfyCalendarNode:
             cal = calendar.monthcalendar(year, month)
             for row, week in enumerate(cal):  # Up to 6 weeks (rows)
                 for col, day in enumerate(week):  # 7 days (columns)
-                    x1 = col * cell_width
+                    x1 = padding_left + col * cell_width
                     y1 = grid_top + row * cell_height
                     x2, y2 = x1 + cell_width, y1 + cell_height
 
@@ -109,18 +122,20 @@ class ComfyCalendarNode:
             result_image = np.array(image)
             tensor_image = torch.tensor(result_image).permute(
                 2, 0, 1).float() / 255  # Normalize to [0,1] range
-            return (tensor_image.cpu(),)  # Return as CPU tensor
+
+            # Step 9: Set the image preview
+            self.image_preview = tensor_image  # Store it for later previewing in the node
+
+            return (tensor_image.cpu(),)  # Return the single image as a tensor
 
         except Exception as e:
             print(f"Error creating calendar: {e}")
-            return (torch.zeros((3, 1, 1)),)  # Return as 1x1 pixel RGB tensor
+            # Return a default empty image if there's an error
+            return (torch.zeros((3, 1, 1)),)
 
-
-NODE_CLASS_MAPPINGS = {
-    "CALENDAR NODES": ComfyCalendarNode
-}
-
-# A dictionary that contains the friendly/humanly readable titles for the nodes
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "ComfyCalendarNode": "CALENDAR NODE"
-}
+    # Optional: Method for rendering the preview of the image inside the node
+    def draw_node_gui(self, gui_context):
+        if hasattr(self, 'image_preview') and self.image_preview is not None:
+            # Add a preview image to the node GUI (you may need to adapt this depending on the system you're using)
+            # This is a placeholder function for rendering
+            gui_context.draw_image(self.image_preview)
