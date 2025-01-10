@@ -1,6 +1,6 @@
 # Import your node classes from the respective module
 # from .FashionX.fashion_nodes import Fashion
-from .Nodes.ComfyCalendarNode import (
+from . import (
     ComfyCalendarNode
 )
 
